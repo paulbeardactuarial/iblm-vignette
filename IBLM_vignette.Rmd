@@ -220,9 +220,14 @@ to observe the components of the "iblm" object in different ways.
 
 The corrected beta coefficients (β'ₐ) can be observed in a density plot.
 
-When varname is set to be a continuous predictor variables, this
-produces a single plot. As shown below - calling the function four times
-with four varnames produces four plots.
+This density plot will also show the standard error for the original
+beta coefficient fitted in the GLM model component. This can be useful
+to understanding the significance of the range in corrected beta
+coefficients.
+
+When the argument varname is set to be a continuous predictor variable a
+single plot is produced. In the code below calling the function four
+times, with four different varname values, produces four plots.
 
 ```{r explain-beta_correct_density-cont}
 
@@ -236,13 +241,14 @@ BonusMalus <- ex$beta_corrected_density(varname = "BonusMalus")
 
 ```
 
-When varname is set to be a categorical predictor variable, a plot is
-produced for each separate level of that categorical variable.
+When the argument varname is set to be a categorical predictor variable,
+a plot is produced for each separate level of that categorical variable.
 
 This, however, does not include the reference level. As shown below -
 calling the function with "VehBrand", which has 11 levels, produces 10
 plots. Because "B1" was used as the reference level it does not have a
-beta coefficient within the glm_model. Therefore it is
+beta coefficient within the GLM model component. Instead, those values
+are migrated to the bias (see below).
 
 ```{r explain-beta_correct_density-cat}
 
