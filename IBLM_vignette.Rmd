@@ -1,0 +1,274 @@
+---
+title: "IBLM"
+author: "Karol Gawlowski and Paul Beard"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Your Vignette Title}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  fig.align = "center"
+)
+```
+
+## Installation
+
+IBLM can be installed from CRAN or GitHub:
+
+```{r install, eval = FALSE}
+# From CRAN
+install.packages("IBLM")
+
+# From GitHub
+remotes::install_github("IFoA-ADSWP/IBLM")
+
+```
+
+
+## Introduction
+
+IBLM stands for Interpretable Boosted Linear Models.
+
+An IBLM is essentially a hybrid model consisting of two components:
+
+1.  Generalised Linear Model (GLM) - fitted to the training data
+
+2.  Booster Model[^1] - fitted to the residuals of the training data
+    against GLM predictions in step 1.
+
+[^1]: As of v.1.0.0 the IBLM package can only fit a booster model of
+    type XGBoost, however we are looking to add other options in the
+    future.
+
+The purpose of this Vignette is to show you how to use IBLM to train,
+explain and predict using functions from this package.
+
+```{r load-package}
+
+library(IBLM)
+
+
+```
+
+## Train
+
+To train an IBLM model we must get our data into an appropriate format. In this document our demonstrations will be completed using French motor claims dataset `freMTPL2freq`.
+
+The first part of the process is to carve your tabular data into 3 dataframes. These will be named 
+
+```{r data-prep}
+
+df <- load_freMTPL2freq()
+
+df_list <- df |> split_into_train_validate_test()
+
+iblm_model <- train_iblm_xgb(
+  df_list,
+  response_var = "ClaimRate",
+  family = "poisson"
+)
+
+ex <- explain_iblm(iblm_model, df_list$test)
+
+
+```
+
+
+```{r basic-example}
+
+df_list <- freMTPLmini  |>
+  split_into_train_validate_test()
+
+iblm_model <- train_iblm_xgb(
+  df_list,
+  response_var = "ClaimRate",
+  family = "poisson"
+)
+
+ex <- explain_iblm(iblm_model, df_list$test)
+
+
+```
+
+
+## Explain
+
+The training process for an IBLM is as follows:
+
+**Step 1: Start with a GLM**
+
+```         
+GLM prediction = β₀ + β₁x₁ + β₂x₂ + ... + βₐxₐ
+```
+
+Where β values are your standard regression coefficients.
+
+**Step 2: Train a Booster on GLM's Errors**
+
+Train an XGBoost model to predict what the GLM got wrong (the
+residuals).
+
+**Step 3: Use SHAP to Break Down the Booster**
+
+SHAP decomposes the booster's prediction into contributions from each
+feature:
+
+```         
+Booster prediction = φ₀ + φ₁(x) + φ₂(x) + ... + φₐ(x)
+```
+
+Where φⱼ(x) is how much feature j contributed to this specific
+prediction.
+
+**Step 4: Convert SHAP Values to Coefficient Corrections**
+
+Transform each SHAP contribution into a coefficient adjustment:
+
+```         
+αⱼ(x) ≈ φⱼ(x) / xⱼ
+```
+
+**Step 5: Combine Them**
+
+The final IBLM model becomes:
+
+```         
+IBLM = (β₀ + φ₀) + (β₁ + α₁(x))x₁ + (β₂ + α₂(x))x₂ + ... + (βₐ + αₐ(x))xₐ
+```
+
+## The Result
+
+You get **corrected coefficients** for each observation:
+
+-   
+
+-   **β** = original GLM coefficient (same for everyone)
+
+-   
+
+-   **α(x)** = personalized correction from the booster (varies by
+    observation)
+
+-   
+
+-   **β + α(x)** = final coefficient for that specific observation
+
+-   
+
+This preserves the familiar linear form while incorporating the
+booster's superior predictive power.
+
+
+## Basic Usage
+
+Demonstrate the most common use cases with simple examples.
+
+```{r basic-example}
+
+df_list <- freMTPLmini  |>
+  split_into_train_validate_test()
+
+iblm_model <- train_iblm_xgb(
+  df_list,
+  response_var = "ClaimRate",
+  family = "poisson"
+)
+
+ex <- explain_iblm(iblm_model, df_list$test)
+
+
+```
+
+## Key Features
+
+### Feature 1
+
+Describe and demonstrate the first major feature.
+
+```{r feature1}
+# Demonstration code
+```
+
+### Feature 2
+
+Describe and demonstrate the second major feature.
+
+```{r feature2}
+# Demonstration code
+```
+
+## Advanced Examples
+
+Show more complex use cases that combine multiple functions or
+demonstrate advanced functionality.
+
+```{r advanced}
+# More complex example
+```
+
+## Visualizations
+
+If your package includes plotting functionality, demonstrate it here.
+
+```{r plots}
+# Plotting examples
+```
+
+## Common Workflows
+
+Walk through typical workflows that users might follow.
+
+```{r workflow}
+# Step-by-step workflow example
+```
+
+## Tips and Best Practices
+
+Share helpful tips, common pitfalls to avoid, and best practices.
+
+-   Tip 1: Explanation
+-   Tip 2: Explanation
+-   Tip 3: Explanation
+
+## Troubleshooting
+
+Address common issues users might encounter.
+
+**Problem**: Description of a common problem
+
+**Solution**: How to solve it
+
+```{r troubleshooting, eval = FALSE}
+# Example solution code
+```
+
+## Summary
+
+Summarize the key points covered in the vignette and suggest next steps
+or additional resources.
+
+## Additional Resources
+
+-   Link to package documentation
+-   Link to GitHub repository
+-   Related packages or resources
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```
