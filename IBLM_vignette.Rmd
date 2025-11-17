@@ -63,7 +63,7 @@ library(dplyr)
 
 ```
 
-## Formulae
+## Process
 
 The overall process for fitting and interpreting an IBLM is as follows:
 
@@ -156,7 +156,8 @@ df_list <- df |> split_into_train_validate_test(seed = 1)
 ```
 
 There is currently only one function available to train an IBLM. This is
-`train_iblm_xgb()` which will use xgboost as the booster model.
+`train_iblm_xgb()` which will use xgboost as the booster model. This
+performs steps 1 and 2 of the Process.
 
 The output is of class "iblm". Objects of this class contain two
 component models "glm_model" and "booster_model". There are also other
@@ -177,14 +178,111 @@ class(iblm_model)
 
 ## Explain
 
-To train an IBLM model we must get our data into an appropriate format.
-In this document our demonstrations will be completed using French motor
-claims dataset `freMTPL2freq`.
+Code to explain and interpret an object of class "iblm" are conveniently
+wrapped in the `explain_iblm()` function. This performs steps 3, 4 and 5
+of the Process. The values derived are all based on the `data` fed in,
+which would usually be the test portion of your dataset.
+
+The following line is all that is required:
 
 ```{r explain-example}
 
 ex <- explain_iblm(iblm_model, df_list$test)
 
+```
+
+The output object is a list containing the following items:
+
+-   **beta_corrected_scatter** Function to create scatter plots showing
+    SHAP corrections vs variable values (see `beta_corrected_scatter()`)
+
+-   **beta_corrected_density** Function to create density plots of SHAP
+    corrections for variables (see `beta_corrected_density()`)
+
+-   **bias_density** Function to create density plots of SHAP
+    corrections migrated to bias (see `bias_density()`)
+
+-   **overall_correction** Function to show global correction
+    distributions (see `overall_correction()`)
+
+-   **shap** Dataframe showing raw SHAP values of data records
+
+-   **beta_corrections** Dataframe showing beta corrections (in
+    wide/one-hot format) of data records
+
+-   **data_beta_coeff** Dataframe showing beta coefficients of data
+    records
+
+Many of the items output are functions. The functions can then be called
+to observe the components of the "iblm" object in different ways.
+
+### Corrected Betas Density
+
+The corrected beta coefficients (β'ₐ) can be observed in a density plot.
+
+When varname is set to be a continuous predictor variables, this
+produces a single plot. As shown below - calling the function four times
+with four varnames produces four plots.
+
+```{r explain-beta_correct_density-cont}
+
+VehPower <- ex$beta_corrected_density(varname = "VehPower")
+
+VehAge <- ex$beta_corrected_density(varname = "VehAge")
+
+DrivAge <- ex$beta_corrected_density(varname = "DrivAge")
+
+BonusMalus <- ex$beta_corrected_density(varname = "BonusMalus")
+
+```
+
+When varname is set to be a categorical predictor variable, a plot is
+produced for each separate level of that categorical variable.
+
+This, however, does not include the reference level. As shown below -
+calling the function with "VehBrand", which has 11 levels, produces 10
+plots. Because "B1" was used as the reference level it does not have a
+beta coefficient within the glm_model. Therefore it is
+
+```{r explain-beta_correct_density-cat}
+
+VehBrand <- ex$beta_corrected_density(varname = "VehBrand", type = "hist")  
+
+VehBrand
+```
+
+### Corrected Betas Scatter
+
+The corrected beta values can be observed for
+
+```{r explain-beta_correct_scatter}
+
+ex$beta_corrected_scatter(varname = "DrivAge", color = "VehPower") 
+
+```
+
+### Corrected Biases
+
+As described in step 4 of Process, some shap values cannot be used as
+beta corrections (because the predictor value is zero). These values are
+instead migrated to the bias. The bias values can be observed with
+`bias_density()` .
+
+```{r explain-bias_density}
+
+bias_corrections <- ex$bias_density()
+
+bias_corrections$bias_correction_var
+
+bias_corrections$bias_correction_total
+
+```
+
+### Overall Correction
+
+```{r explain-overall_correction}
+
+ex$overall_correction()
 
 ```
 
