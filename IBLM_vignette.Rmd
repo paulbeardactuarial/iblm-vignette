@@ -38,7 +38,6 @@ remotes::install_github("IFoA-ADSWP/IBLM")
 
 ```
 
-
 ## Introduction
 
 IBLM stands for Interpretable Boosted Linear Models.
@@ -60,56 +59,15 @@ explain and predict using functions from this package.
 ```{r load-package}
 
 library(IBLM)
-
-
-```
-
-## Train
-
-To train an IBLM model we must get our data into an appropriate format. In this document our demonstrations will be completed using French motor claims dataset `freMTPL2freq`.
-
-The first part of the process is to carve your tabular data into 3 dataframes. These will be named 
-
-```{r data-prep}
-
-df <- load_freMTPL2freq()
-
-df_list <- df |> split_into_train_validate_test()
-
-iblm_model <- train_iblm_xgb(
-  df_list,
-  response_var = "ClaimRate",
-  family = "poisson"
-)
-
-ex <- explain_iblm(iblm_model, df_list$test)
-
+library(dplyr)
 
 ```
 
+## Formulae
 
-```{r basic-example}
+The overall process for fitting and interpreting an IBLM is as follows:
 
-df_list <- freMTPLmini  |>
-  split_into_train_validate_test()
-
-iblm_model <- train_iblm_xgb(
-  df_list,
-  response_var = "ClaimRate",
-  family = "poisson"
-)
-
-ex <- explain_iblm(iblm_model, df_list$test)
-
-
-```
-
-
-## Explain
-
-The training process for an IBLM is as follows:
-
-**Step 1: Start with a GLM**
+**Step 1: Fit a GLM**
 
 ```         
 GLM prediction = β₀ + β₁x₁ + β₂x₂ + ... + βₐxₐ
@@ -119,13 +77,13 @@ Where β values are your standard regression coefficients.
 
 **Step 2: Train a Booster on GLM's Errors**
 
-Train an XGBoost model to predict what the GLM got wrong (the
-residuals).
+Train a booster model (i.e. XGBoost) on the residuals of the actual
+response values against the GLM predictions.
 
 **Step 3: Use SHAP to Break Down the Booster**
 
-SHAP decomposes the booster's prediction into contributions from each
-feature:
+SHAP decomposition allows the booster's prediction to be apportioned
+into contributions from each feature:
 
 ```         
 Booster prediction = φ₀ + φ₁(x) + φ₂(x) + ... + φₐ(x)
@@ -134,62 +92,139 @@ Booster prediction = φ₀ + φ₁(x) + φ₂(x) + ... + φₐ(x)
 Where φⱼ(x) is how much feature j contributed to this specific
 prediction.
 
-**Step 4: Convert SHAP Values to Coefficient Corrections**
+**Step 4: Convert SHAP Values to Beta Coefficient Corrections**
 
-Transform each SHAP contribution into a coefficient adjustment:
+Transform each SHAP contribution into beta corrections:
 
 ```         
 αⱼ(x) ≈ φⱼ(x) / xⱼ
 ```
 
-**Step 5: Combine Them**
-
-The final IBLM model becomes:
+For instances where xⱼ = 0 the αⱼ(x) is set to 0 and the value is
+instead added to an intercept correction, α0.
 
 ```         
-IBLM = (β₀ + φ₀) + (β₁ + α₁(x))x₁ + (β₂ + α₂(x))x₂ + ... + (βₐ + αₐ(x))xₐ
+αⱼ(x) = 0 if xⱼ = 0 
+α0​={j∣xj​=0}∑​ϕj​(x)
 ```
 
-## The Result
+**Step 5: Combine Them**
 
-You get **corrected coefficients** for each observation:
+The final IBLM model can be interpreted as a collection of adjusted
+GLMs. Each row of the data will have its own GLM coefficients which are:
 
--   
+1.  The GLM coefficients derived in step 1, which are the same for all
+    rows
 
--   **β** = original GLM coefficient (same for everyone)
+2.  The beta corrections derived in step 4, which are unique to that
+    predictor variable combination.
 
--   
+```         
+IBLM = (β₀ + φ₀ + α0) + (β₁ + α₁(x))x₁ + (β₂ + α₂(x))x₂ + ... + (βₐ + αₐ(x))xₐ
+```
 
--   **α(x)** = personalized correction from the booster (varies by
-    observation)
+or
 
--   
+```         
+IBLM = β'₀ + β'₁x₁ + β'₂x₂ + ... + β'ₐxₐ
+where β'ₐ = (βₐ + αₐ(x)) 
+and β'₀ = β₀ + φ₀ + α0
+```
 
--   **β + α(x)** = final coefficient for that specific observation
+This preserves the familiar GLM form while incorporating the booster's
+superior predictive power.
 
--   
+## Train
 
-This preserves the familiar linear form while incorporating the
-booster's superior predictive power.
+To train an IBLM model we must get our data into an appropriate format.
+In this document our demonstrations will be completed using French motor
+claims dataset `freMTPL2freq`.
 
+Data for training an IBLM model must be in the form of a list of 3
+dataframes. These will be named "train", "validate" and "test". The
+function `split_into_train_validate_test()` can conveniently split a
+single dataframe into such a structure.
 
-## Basic Usage
+```{r data-prep}
 
-Demonstrate the most common use cases with simple examples.
+df <- load_freMTPL2freq()
 
-```{r basic-example}
+df <- df |> mutate(ClaimNb = round(ClaimNb))
 
-df_list <- freMTPLmini  |>
-  split_into_train_validate_test()
+df_list <- df |> split_into_train_validate_test(seed = 1)
+
+```
+
+There is currently only one function available to train an IBLM. This is
+`train_iblm_xgb()` which will use xgboost as the booster model.
+
+The output is of class "iblm". Objects of this class contain two
+component models "glm_model" and "booster_model". There are also other
+items containing information (see Value section of `train_iblm_xgb()`
+for more information)
+
+```{r train}
 
 iblm_model <- train_iblm_xgb(
   df_list,
-  response_var = "ClaimRate",
+  response_var = "ClaimNb",
   family = "poisson"
 )
 
+class(iblm_model)
+
+```
+
+## Explain
+
+To train an IBLM model we must get our data into an appropriate format.
+In this document our demonstrations will be completed using French motor
+claims dataset `freMTPL2freq`.
+
+```{r explain-example}
+
 ex <- explain_iblm(iblm_model, df_list$test)
 
+
+```
+
+## Predict
+
+The package contains a predict method for the class "iblm". This employs
+the `predict()` method of both the "glm_model" and "booster_model" items
+within the "iblm" class object.
+
+```{r predict-example}
+
+predictions <- predict(iblm_model, df_list$test)
+
+```
+
+Note that because IBLM is essentially a collection of GLMs, and the
+corrected beta coefficients are derived by the `explain_iblm()`
+function, it is also possible to predict through linear calculation.
+
+```{r predict-alternative}
+
+coeff_multiplier <- 
+  df_list$test |>
+  select(-all_of("ClaimNb")) |>
+  mutate(
+    across(
+      all_of(iblm_model$predictor_vars$categorical),
+      ~1
+      )
+    ) |>
+  mutate(bias = 1, .before = 1)
+
+predictions_alt <- 
+  (ex$data_beta_coeff * coeff_multiplier) |>
+  rowSums() |> 
+  exp() |>
+  unname()
+
+# difference in predictions very small between two alternative methods
+range(predictions_alt / predictions - 1)
 
 ```
 
