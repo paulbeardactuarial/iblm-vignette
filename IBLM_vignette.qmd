@@ -8,6 +8,7 @@ format:
     toc-depth: 2
     code-fold: false
     embed-resources: true
+    css: style.css
 ---
 
 ```{r}
@@ -112,6 +113,12 @@ The purpose of this Vignette is to show you how to use IBLM to train, explain an
 ```{r}
 #| label: load-package
 library(IBLM)
+```
+
+```{r}
+#| label: other-packages
+#| echo: false
+#| message: false
 library(dplyr)
 ```
 
@@ -121,9 +128,11 @@ The overall process for fitting and interpreting an IBLM is as follows:
 
 **Step 1: Fit a GLM**
 
-```         
+::: {.eq-block}
+```math
 GLM prediction = β₀ + β₁x₁ + β₂x₂ + ... + βₙxₙ
 ```
+:::
 
 Where β values are your standard regression coefficients.
 
@@ -135,9 +144,11 @@ Train a booster model (i.e. XGBoost) on the residuals of the actual response val
 
 SHAP decomposition allows the booster's prediction to be apportioned into contributions from each feature:
 
-```         
+::: {.eq-block}
+```math       
 Booster prediction = φ₀ + φ₁(x) + φ₂(x) + ... + φₙ(x)
 ```
+:::
 
 Where φⱼ(x) is how much feature j contributed to this specific prediction.
 
@@ -145,16 +156,20 @@ Where φⱼ(x) is how much feature j contributed to this specific prediction.
 
 Transform each SHAP contribution into beta corrections:
 
-```         
+::: {.eq-block}
+```math       
 αⱼ(x) ≈ φⱼ(x) / xⱼ
 ```
+:::
 
 For instances where xⱼ = 0 the αⱼ(x) is set to 0 and the value is instead added to an intercept correction, α0.
 
-```         
+::: {.eq-block}
+```math            
 αⱼ(x) = 0 if xⱼ = 0 
 α0​={j∣xj​=0}∑​ϕj​(x)
 ```
+:::
 
 **Step 5: Combine Them**
 
@@ -164,17 +179,21 @@ The final IBLM model can be interpreted as a collection of adjusted GLMs. Each r
 
 2.  The beta corrections derived in step 4, which are unique to that predictor variable combination.
 
-```         
+::: {.eq-block}
+```math           
 IBLM = (β₀ + φ₀ + α0) + (β₁ + α₁(x))x₁ + (β₂ + α₂(x))x₂ + ... + (βₙ + αₙ(x))xₙ
 ```
+:::
 
 or
 
-```         
+::: {.eq-block}
+```math            
 IBLM = β'₀ + β'₁x₁ + β'₂x₂ + ... + β'ₙxₙ
 where β'ⱼ = (βⱼ + αⱼ(x)) 
 and β'₀ = β₀ + φ₀ + α0
 ```
+:::
 
 This preserves the familiar GLM form while incorporating the booster's superior predictive power.
 
@@ -238,7 +257,7 @@ The output object is a list containing the following items:
 
 Many of the items output are functions. The functions can then be called to observe the components of the "iblm" object in different ways.
 
-### Corrected Betas Density
+### Beta Corrected Density
 
 The corrected beta coefficients (β'ⱼ) can be observed in a density plot. This plotting function allows the user to see corrected beta coefficient values for a particular variable.
 
@@ -280,21 +299,23 @@ ex$beta_corrected_density(varname = "BonusMalus")
 
 #### Categorical Variables
 
-For categorical variables, calling the function creates a list of plots. A separate plot is produced for each level of that categorical variable. Note this does not include the reference level. This is demonstrated below with "VehBrand" which has 11 levels and produces 10 plots. Because "B1" was used as the reference level it does not have a beta coefficient within the GLM model component. Instead, those values are migrated to the bias (see below).
+For categorical variables, calling the function creates a **list** of ggplot objects. A separate plot is produced for each level of that categorical variable. Note this does not include the reference level. 
 
-::: panel-tabset
+In the example below "VehBrand" has 11 levels and produces 10 plots. Level "B1" was a reference level and does not have a beta coefficient within the GLM component. Instead, for "B1", the SHAP values are migrated to the bias (see [Bias Corrected Density]). Also in the example, we have wrapped our list using patchwork to create a single graphic for simplicity.
+
 ```{r}
 #| label: beta_correct_density-cat
-#| echo: false  
-#| results: asis
+#| fig-width: 12
+#| fig-height: 20
+#| fig-align: center
 
 VehBrand <- ex$beta_corrected_density(varname = "VehBrand", type = "hist")
 
-VehBrand |> create_tabset()
-```
-:::
+VehBrand |> patchwork::wrap_plots(ncol = 2) 
 
-### Corrected Betas Scatter
+```
+
+### Beta Corrected Scatter
 
 The corrected beta coefficients (β'ⱼ) can be observed in a scatter plot (or boxplot). This plotting function allows the user to see corrected beta coefficient values for a particular variable **and the relationship to that particlar variable value**.
 
@@ -305,11 +326,24 @@ When varname is set to a numerical variable, a scatter plot is produced. The exa
 Note the color argument can also be set to try and observe interactions with a second variable. 
 
 ```{r}
-#| label: explain-beta_correct_scatter
+#| label: explain-beta_correct_scatter-num
 ex$beta_corrected_scatter(varname = "DrivAge", color = "VehPower")
 ```
 
-### Corrected Biases
+#### Categorical Variables
+
+When varname is set to a categorical variable, a boxplot is produced. This shows the distribution for each individual level within that categorical variable.
+
+Note the color argument can also be set to try and observe interactions with a second variable. 
+
+```{r}
+#| label: explain-beta_correct_scatter-cat
+ex$beta_corrected_scatter(varname = "VehBrand")
+```
+
+
+
+### Bias Corrected Density
 
 As described in step 4 of Process, some shap values cannot be translated to beta corrections. These values are instead migrated to the bias. There are two situations where this can occur:
 
@@ -323,11 +357,20 @@ The `bias_correction_total` plot is the cumulative sum of these components acros
 The bias values can be observed with `bias_density()`.
 
 ::: panel-tabset
-```{r}
-#| label: explain-bias_density
-bias_corrections <- ex$bias_density()
+#### Variable
 
-bias_corrections |> create_tabset()
+```{r}
+#| label: explain-bias_density-var
+bias_corrections <- ex$bias_density()
+bias_corrections$bias_correction_var
+```
+
+#### Total
+
+```{r}
+#| label: explain-bias_density-total
+bias_corrections <- ex$bias_density()
+bias_corrections$bias_correction_total
 ```
 :::
 
