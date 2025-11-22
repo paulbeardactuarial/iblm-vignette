@@ -2,6 +2,7 @@
 title: "IBLM"
 author: "Karol Gawlowski and Paul Beard"
 date: today
+engine: knitr
 format: 
   html:
     toc: true
@@ -109,7 +110,7 @@ An IBLM is essentially a hybrid model consisting of two components:
 
 [^1]: As of v.1.0.0 the IBLM package can only fit a booster model of type XGBoost, however we are looking to add other options in the future.
 
-The purpose of this Vignette is to show you how to use IBLM to train, explain and predict using functions from this package.
+The purpose of this article is to show you how to use IBLM to train, explain and predict using functions from this package.
 
 ```{r}
 #| label: load-package
@@ -200,7 +201,7 @@ The final IBLM can be interpreted as a collection of adjusted GLMs. Each row of 
 
 ::: eq-block
 $$
-h(\mu) = (\beta_0 + \varphi_0 + \alpha_0) + (\beta_1 + \alpha_1(x))x_1 + (\beta_2 + \alpha_2(x))x_2 + \cdots + (\beta_n + \alpha_n(x))x_n
+g(\mu) = (\beta_0 + \varphi_0 + \alpha_0) + (\beta_1 + \alpha_1(x))x_1 + (\beta_2 + \alpha_2(x))x_2 + \cdots + (\beta_n + \alpha_n(x))x_n
 $$
 :::
 
@@ -209,7 +210,7 @@ or
 ::: eq-block
 $$
 \begin{aligned}
-h(\mu) &= \beta'_0 + \beta'_1 x_1 + \beta'_2 x_2 + \cdots + \beta'_n x_n \\
+g(\mu) &= \beta'_0 + \beta'_1 x_1 + \beta'_2 x_2 + \cdots + \beta'_n x_n \\
 \text{where } \beta'_j &= \beta_j + \alpha_j(x) \\
 \text{and } \beta'_0 &= \beta_0 + \varphi_0 + \alpha_0
 \end{aligned}
@@ -511,9 +512,9 @@ The correction corridor function applies `predict.iblm()` with different setting
 correction_corridor(
   iblm_model, 
   df_list$test,
-  trim_vals = c(NA_real_, 1, 0),
+  trim_vals = c(0.5, 0),
   sample_perc = 0.1,
-  color = "DrivAge") 
+  color = "DrivAge")
 
 
 ```
